@@ -11,6 +11,7 @@ on:
 # error excerpt.
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -164,3 +165,53 @@ jobs:
           path: artifacts/WordSearchKing-v1.0.0.aab
           if-no-files-found: error
           compression-level: 0
+
+  # Permanent smoke test: launch every freshly built APK on an emulator and
+  # verify the app actually opens without crashing.
+  smoke:
+    name: Smoke test APK (emulator)
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: word-search-king-apk
+
+      - name: Launch APK on emulator
+        uses: ./.github/actions/emulator-smoke
+        with:
+          apk-path: WordSearchKing-v1.0.0.apk
+
+  # Temporary diagnostic job (remove once the startup crash is fixed):
+  # runs the PREVIOUS apk in parallel with the rebuild, so the crash stack
+  # trace is available quickly. Triggered by "smoke-previous" in the commit
+  # message.
+  smoke-previous:
+    name: Smoke test previous APK (emulator)
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'smoke-previous')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download previous release APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=34599044346
+          echo "Taking APK from Android Build run $RUN_ID"
+          ART_ID=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.name == "word-search-king-apk") | .id][0]')
+          if [ -z "$ART_ID" ]; then
+            echo "::error::No word-search-king-apk artifact found in run $RUN_ID"
+            exit 1
+          fi
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip" > apk.zip
+          unzip -o apk.zip
+          ls -la WordSearchKing-v1.0.0.apk
+
+      - name: Launch previous APK on emulator
+        uses: ./.github/actions/emulator-smoke
+        with:
+          apk-path: WordSearchKing-v1.0.0.apk
+          logcat-artifact-name: smoke-logcat-previous
