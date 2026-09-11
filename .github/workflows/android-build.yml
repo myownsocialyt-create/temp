@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Allow the failure-diagnostics step to post a commit comment with the gradle
+# error excerpt.
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -18,10 +23,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -68,17 +73,17 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
       - name: Set up Java (Temurin 21)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -101,29 +106,36 @@ jobs:
           set -o pipefail
           ./gradlew assembleRelease bundleRelease --stacktrace --no-daemon 2>&1 | tee /tmp/gradle-build.log
 
-      - name: Report build failure excerpt (commit comment)
+      - name: Report failure (annotations + commit comment)
         if: failure()
         run: |
+          # 1) Emit the key error lines as step annotations (readable via the API
+          #    without any extra permissions).
+          {
+            grep -B 8 -A 60 "What went wrong" /tmp/gradle-build.log | head -90
+            grep -m 5 -A 15 -E "^\* Where|^Caused by|error:|Execution failed" /tmp/gradle-build.log | head -60
+            tail -n 25 /tmp/gradle-build.log
+          } | sed 's/%/%25/g; s/\r$//' | grep -v '^--$' | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error::${line:0:900}" || true
+          done
+
+          # 2) Post a fuller excerpt as a commit comment.
           {
             echo "### Android build failed — gradle error excerpt"
             echo '```'
-          } > /tmp/comment.md
-          grep -B 20 -A 60 "What went wrong" /tmp/gradle-build.log | head -100 >> /tmp/comment.md || true
-          if [ ! -s /tmp/comment.md ] || [ "$(wc -l < /tmp/comment.md)" -le 3 ]; then
-            tail -n 80 /tmp/gradle-build.log >> /tmp/comment.md || echo "(no gradle log available)" >> /tmp/comment.md
-          fi
-          {
+            grep -B 20 -A 80 "What went wrong" /tmp/gradle-build.log | head -140 || tail -n 100 /tmp/gradle-build.log
             echo '```'
             echo "_(automated diagnostics from run ${{ github.run_id }})_"
-          } >> /tmp/comment.md
+          } > /tmp/comment.md
           PAYLOAD=$(jq -n --rawfile b /tmp/comment.md '{body: $b}')
-          curl -s -f -X POST \
+          curl -s -X POST \
             -H "Authorization: Bearer ${{ github.token }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
-            -d "$PAYLOAD" || echo "(could not post comment)"
+            -d "$PAYLOAD" > /dev/null || echo "(could not post commit comment)"
 
       - name: Collect artifacts
+        if: success()
         run: |
           mkdir -p artifacts
           cp mobile/android/app/build/outputs/apk/release/app-release.apk artifacts/WordSearchKing-v1.0.0.apk
@@ -131,6 +143,7 @@ jobs:
           ls -la artifacts
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: word-search-king-apk
@@ -139,6 +152,7 @@ jobs:
           compression-level: 0
 
       - name: Upload AAB artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: word-search-king-aab
