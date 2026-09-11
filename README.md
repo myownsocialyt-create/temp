@@ -30,7 +30,7 @@ Players pick a category, then find hidden words in a letter grid by dragging a f
 
 - **React Native 0.86 / Expo SDK 57**, TypeScript, expo-router (file-based routing)
 - `react-native-gesture-handler` — pan gestures for word selection
-- `expo-av` — sound playback
+- `expo-audio` — sound playback
 - `react-native-google-mobile-ads` — AdMob interstitial + rewarded ads
 - `@react-native-async-storage/async-storage` — coins / completed-levels persistence
 - **NestJS** backend with a single health endpoint (`GET /health → { "status": "ok" }`) — no auth, no leaderboard, no cloud sync
@@ -43,7 +43,7 @@ Players pick a category, then find hidden words in a letter grid by dragging a f
 │   ├── app/                              # expo-router screens (5 screens)
 │   ├── src/
 │   │   ├── ads/                          # AdMob manager (frequency-capped)
-│   │   ├── audio/                        # Sound manager (expo-av)
+│   │   ├── audio/                        # Sound manager (expo-audio)
 │   │   ├── components/                   # Shared UI components
 │   │   ├── data/                         # 15 categories + bonus-word dictionary
 │   │   ├── game/                         # Puzzle engine, colors, constants

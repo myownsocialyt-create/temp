@@ -7,20 +7,42 @@
  * Interstitial frequency cap (per spec): the ad is shown only on every 2nd
  * eligible trigger AND at least 60 seconds after the previous show.
  * Rewarded ads are used to grant extra hints.
+ *
+ * The library is loaded LAZILY and defensively: its JS entry calls
+ * TurboModuleRegistry.getEnforcing('RNGoogleMobileAdsModule') at import
+ * time, which throws if the native module is unavailable — a static
+ * import would crash the whole app on open. We require() it inside a
+ * try/catch instead and simply run without ads if it is unavailable;
+ * gameplay never depends on ads.
  */
-import {
-  AdEventType,
-  InterstitialAd,
-  MobileAds,
-  RewardedAd,
-  RewardedAdEventType,
-} from 'react-native-google-mobile-ads';
+import type { InterstitialAd, RewardedAd } from 'react-native-google-mobile-ads';
 
 import {
   ADMOB,
   INTERSTITIAL_EVERY_N_TRIGGERS,
   INTERSTITIAL_MIN_INTERVAL_MS,
 } from '../config';
+
+type Rngma = typeof import('react-native-google-mobile-ads');
+
+let rngma: Rngma | null = null;
+let rngmaAttempted = false;
+
+/** Loads react-native-google-mobile-ads once; returns null if unavailable. */
+function getRngma(): Rngma | null {
+  if (!rngmaAttempted) {
+    rngmaAttempted = true;
+    try {
+      // Intentionally a runtime require() so a missing native module
+      // degrades gracefully instead of crashing the app at startup.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      rngma = require('react-native-google-mobile-ads') as Rngma;
+    } catch {
+      rngma = null;
+    }
+  }
+  return rngma;
+}
 
 let interstitial: InterstitialAd | null = null;
 let rewarded: RewardedAd | null = null;
@@ -57,40 +79,49 @@ export function initAds(): void {
   if (adsInitialized) return;
   adsInitialized = true;
 
-  MobileAds()
-    .initialize()
-    .catch(() => {
-      // Offline or no ad service — the game must keep working without ads.
+  const ads = getRngma();
+  if (!ads) return; // Ads unavailable in this environment — game continues without them.
+
+  try {
+    ads.MobileAds()
+      .initialize()
+      .catch(() => {
+        // Offline or no ad service — the game must keep working without ads.
+      });
+
+    interstitial = ads.InterstitialAd.createForAdRequest(ADMOB.interstitialUnitId);
+    interstitial.addAdEventListener(ads.AdEventType.ERROR, () => {
+      scheduleInterstitialReload(60_000);
     });
+    interstitial.addAdEventListener(ads.AdEventType.CLOSED, () => {
+      try {
+        interstitial?.load();
+      } catch {
+        // ignore
+      }
+    });
+    interstitial.load();
 
-  interstitial = InterstitialAd.createForAdRequest(ADMOB.interstitialUnitId);
-  interstitial.addAdEventListener(AdEventType.ERROR, () => {
-    scheduleInterstitialReload(60_000);
-  });
-  interstitial.addAdEventListener(AdEventType.CLOSED, () => {
-    try {
-      interstitial?.load();
-    } catch {
-      // ignore
-    }
-  });
-  interstitial.load();
-
-  rewarded = RewardedAd.createForAdRequest(ADMOB.rewardedUnitId);
-  rewarded.addAdEventListener(AdEventType.ERROR, () => {
-    scheduleRewardedReload(60_000);
-  });
-  rewarded.addAdEventListener(AdEventType.CLOSED, () => {
-    try {
-      rewarded?.load();
-    } catch {
-      // ignore
-    }
-  });
-  rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
-    rewardEarned = true;
-  });
-  rewarded.load();
+    rewarded = ads.RewardedAd.createForAdRequest(ADMOB.rewardedUnitId);
+    rewarded.addAdEventListener(ads.AdEventType.ERROR, () => {
+      scheduleRewardedReload(60_000);
+    });
+    rewarded.addAdEventListener(ads.AdEventType.CLOSED, () => {
+      try {
+        rewarded?.load();
+      } catch {
+        // ignore
+      }
+    });
+    rewarded.addAdEventListener(ads.RewardedAdEventType.EARNED_REWARD, () => {
+      rewardEarned = true;
+    });
+    rewarded.load();
+  } catch {
+    // Ads are best-effort; never let them break the game.
+    interstitial = null;
+    rewarded = null;
+  }
 }
 
 /**

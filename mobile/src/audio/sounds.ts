@@ -1,10 +1,12 @@
 /**
- * Sound effects via expo-av.
+ * Sound effects via expo-audio (SDK 57's supported audio package — the
+ * legacy expo-av native library is ABI-incompatible with RN 0.86).
  *
  * All sound files are tiny, royalty-free (synthesized for this project),
  * self-hosted .mp3 files (total < 500 KB) so gameplay audio works fully offline.
  */
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import type { AudioPlayer } from 'expo-audio';
 
 import correct from '../../assets/sounds/correct.mp3';
 import coin from '../../assets/sounds/coin.mp3';
@@ -47,7 +49,7 @@ const VOLUMES: Record<SoundName, number> = {
   gameover: 0.9,
 };
 
-const sounds: Partial<Record<SoundName, Audio.Sound>> = {};
+const players: Partial<Record<SoundName, AudioPlayer>> = {};
 let preloadStarted = false;
 
 /** Preloads all sound effects (called once at app startup). */
@@ -55,9 +57,8 @@ export async function preloadSounds(): Promise<void> {
   if (preloadStarted) return;
   preloadStarted = true;
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
     });
   } catch {
     // Audio mode is best-effort.
@@ -65,8 +66,7 @@ export async function preloadSounds(): Promise<void> {
   await Promise.all(
     (Object.keys(FILES) as SoundName[]).map(async (name) => {
       try {
-        const { sound } = await Audio.Sound.createAsync(FILES[name]);
-        sounds[name] = sound;
+        players[name] = createAudioPlayer(FILES[name]);
       } catch {
         // Never let audio issues break gameplay.
       }
@@ -76,12 +76,16 @@ export async function preloadSounds(): Promise<void> {
 
 /** Plays a sound effect. Safe to call anywhere; failures are ignored. */
 export async function playSound(name: SoundName): Promise<void> {
-  const sound = sounds[name];
-  if (!sound) return;
+  const player = players[name];
+  if (!player) return;
   try {
-    await sound.setPositionAsync(0);
-    await sound.setVolumeAsync(VOLUMES[name]);
-    await sound.playAsync();
+    player.volume = VOLUMES[name];
+    await player.seekTo(0);
+  } catch {
+    // ignore
+  }
+  try {
+    player.play();
   } catch {
     // ignore
   }
