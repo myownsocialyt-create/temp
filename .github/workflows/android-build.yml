@@ -114,6 +114,7 @@ jobs:
           {
             grep -B 8 -A 60 "What went wrong" /tmp/gradle-build.log | head -90
             grep -m 5 -A 15 -E "^\* Where|^Caused by|error:|Execution failed" /tmp/gradle-build.log | head -60
+            grep -E "^e: |incompatible version of Kotlin|Using expo modules|Using the following versions|kotlin:" /tmp/gradle-build.log | head -40
             tail -n 25 /tmp/gradle-build.log
           } | sed 's/%/%25/g; s/\r$//' | grep -v '^--$' | while IFS= read -r line; do
             [ -n "$line" ] && echo "::error::${line:0:900}" || true
