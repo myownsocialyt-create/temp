@@ -110,12 +110,14 @@ jobs:
         if: failure()
         run: |
           # 1) Emit the key error lines as step annotations (readable via the API
-          #    without any extra permissions).
+          #    without any extra permissions). Most valuable lines FIRST because
+          #    GitHub caps annotations at 10 per step.
           {
-            grep -B 8 -A 60 "What went wrong" /tmp/gradle-build.log | head -90
-            grep -m 5 -A 15 -E "^\* Where|^Caused by|error:|Execution failed" /tmp/gradle-build.log | head -60
-            grep -E "^e: |incompatible version of Kotlin|Using expo modules|Using the following versions|kotlin:" /tmp/gradle-build.log | head -40
-            tail -n 25 /tmp/gradle-build.log
+            grep -A 8 "Using the following versions" /tmp/gradle-build.log
+            grep -E "^e: |incompatible version of Kotlin" /tmp/gradle-build.log | head -6
+            grep -B 2 -A 12 "What went wrong" /tmp/gradle-build.log | head -30
+            grep -m 3 -A 10 -E "^Caused by|Execution failed" /tmp/gradle-build.log | head -30
+            tail -n 15 /tmp/gradle-build.log
           } | sed 's/%/%25/g; s/\r$//' | grep -v '^--$' | while IFS= read -r line; do
             [ -n "$line" ] && echo "::error::${line:0:900}" || true
           done
@@ -124,6 +126,8 @@ jobs:
           {
             echo "### Android build failed — gradle error excerpt"
             echo '```'
+            grep -A 8 "Using the following versions" /tmp/gradle-build.log || true
+            grep -E "^e: |incompatible version of Kotlin" /tmp/gradle-build.log | head -10 || true
             grep -B 20 -A 80 "What went wrong" /tmp/gradle-build.log | head -140 || tail -n 100 /tmp/gradle-build.log
             echo '```'
             echo "_(automated diagnostics from run ${{ github.run_id }})_"
