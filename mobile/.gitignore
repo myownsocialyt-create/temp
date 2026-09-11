@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# TypeScript
+*.tsbuildinfo
+
+# Metro
+.metro-health-check*
+
+# misc
+*.orig.*
+*.pem
+.DS_Store
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.env*.local
+
+# Native build outputs — the android/ project folder itself IS committed
+/android/.gradle/
+/android/app/build/
+/android/build/
+/android/local.properties
+/android/.idea/
+/android/*.iml
+/android/app/.cxx/
+/android/app/.kotlin/
+.kotlin/
+
+# NOTE: android/app/wordsearchking.keystore (the placeholder release/upload
+# keystore) is intentionally committed so CI can sign the APK/AAB.
+# Replace it with your own keystore before publishing (see README).

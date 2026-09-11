@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Word Search King",
+    "slug": "word-search-king",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "wordsearchking",
+    "backgroundColor": "#f0f0f3",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wordsearchking.game"
+    },
+    "android": {
+      "package": "com.wordsearchking.game",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#f0f0f3",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/with-clean-permissions",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#f0f0f3"
+        }
+      ]
+    ]
+  }
+}
