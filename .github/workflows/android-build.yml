@@ -174,15 +174,27 @@ jobs:
     name: Smoke test APK (emulator)
     needs: android
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
+    strategy:
+      # Re-roll the runner if the first attempt hits an emulator/KVM-less host.
+      # A real app crash fails every attempt, so the signal stays honest.
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        attempt: [1, 2]
     steps:
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
           name: word-search-king-apk
 
-      - name: Check KVM availability
-        run: ls -la /dev/kvm || echo "::warning::/dev/kvm missing - emulator may fail to boot"
+      - name: Check KVM availability (fail fast on KVM-less hosts)
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::/dev/kvm is not available on this runner - hardware emulation impossible. Failing fast; the next matrix attempt re-rolls the runner."
+            exit 1
+          fi
+          echo "/dev/kvm present"
 
       - name: Boot emulator and launch the app
         uses: reactivecircus/android-emulator-runner@v2
@@ -229,7 +241,7 @@ jobs:
             echo "App is alive and running (pid $PID) - smoke test PASSED"
 
       - name: Report crash details (annotations + commit comment)
-        if: ${{ failure() }}
+        if: ${{ !cancelled() && !success() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -275,6 +287,6 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-logcat
+          name: smoke-logcat-attempt-${{ matrix.attempt }}
           path: /tmp/logcat.txt
           if-no-files-found: ignore
